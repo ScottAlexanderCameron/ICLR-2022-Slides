@@ -1,0 +1,265 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+  <title> ICLR 2022 </title>
+
+  <script src="../reveal/dist/reveal.js"></script>
+  <script src="../reveal/plugin/notes/notes.js"></script>
+  <script src="../reveal/plugin/markdown/markdown.js"></script>
+  <script src="../reveal/plugin/math/math.js"></script>
+  <script src="../reveal/plugin/highlight/highlight.js"></script>
+
+  <link rel="stylesheet" href="../reveal/dist/reset.css">
+  <link rel="stylesheet" href="../reveal/dist/reveal.css">
+  <link rel="stylesheet" href="../reveal/dist/theme/white.css" id="theme">
+  <link rel="stylesheet" href="../reveal/plugin/highlight/zenburn.css" id="highlight-theme">
+  <style>
+    a {
+      font-size: 60%;
+    }
+
+    .logo-instadeep {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      height: 50px;
+    }
+
+    .logo-oxford {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      height: 50px;
+    }
+
+    .background-instadeep {
+      width: 100%;
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+      opacity: 0.23;
+    }
+
+    .footer-name {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      font-size: 60%;
+    }
+
+    .author-names {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-around;
+        font-size:65%;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="reveal">
+    <img src="images/background.png" class="background-instadeep">
+    <img src="images/instadeep.png" class="logo-instadeep" />
+    <img src="images/oxford.png" class="logo-oxford" />
+    <div class="footer-name">
+      <p> Scott Cameron, Tyron Cameron, Arnu Pretorius, Stephen Roberts </p>
+    </div>
+    <div class="slides">
+        <!--
+      <section>
+        <p><u>
+            Robust and Scalable SDE Learning: <br \>
+            A Functional Perspective
+        </u></p>
+        <div class="author-names">
+            <p>
+              Scott Cameron<br />
+              InstaDeep <br />
+              University of Oxford
+            </p>
+            <p>
+              Tyron Cameron<br />
+              Discovery Insure 
+            </p>
+            <p>
+              Arnu Pretorius<br />
+              InstaDeep 
+            </p>
+            <p>
+              Stephen Roberts<br />
+              University of Oxford 
+            </p>
+        </div>
+      </section>
+      -->
+      <section>
+        <section>
+          <p><u> Learning SDEs </u></p>
+          \[ \dd X = f_\theta(X) \dd{t} + g_\theta(X)\dd{W} \]
+          \[ x_n = X(t_n) \]
+          <p class="fragment"> Need to calculate \(p_X(x_{1:N}\,|\,\theta)\) </p>
+        </section>
+        <section>
+          <p><u> Use Euler&ndash;Maruyama Discretization </u></p>
+          \[X_{t + \Delta t} \sim \N(\mu_t, \Sigma_t) \]
+          \[
+          \mu_t = X_t + f(X_t) \Delta t \\
+          \Sigma_t = g(X_t)g^T(X_t) \Delta t
+          \]
+        </section>
+        <section>
+          <p><u> Learning by Integrating Trajectories </u></p>
+          <img src="images/latent_sde.gif" width="60%">
+          <br />
+          <a href="https://github.com/google-research/torchsde">github.com/google-research/torchsde</a>
+        </section>
+      </section>
+      <section>
+        <p><u> Problems </u></p>
+        <ul>
+          <li> Non-parallelizable = slow </li>
+          <br />
+          <li> Does not scale (high grad variance) </li>
+          <br />
+          <li> Difficulty using probabilistic models for \(f_\theta\) </li>
+        </ul>
+      </section>
+      <section>
+      <!--
+        <section>
+          <p><u> Linear SDEs are Gauss&ndash;Markov Processes </u></p>
+          \[\dd Y = \sigma(t) \dd W\]
+          <p> Easy to sample bridges </p>
+          <pre><code data-trim data-line-numbers class="language-python">
+          t = linspace(0, T)
+          dt = t[1] - t[0]
+          Y = cumsum(sigma * sqrt(dt) * randn(t.shape)) # prior process
+          Y -= Y[0]
+          Y = y0 + Y + t/T * (yT - y0 - Y[-1])          # posterior process
+          </code></pre>
+          Easy to calculate \(p_Y(x_{1:N})\)
+        </section>
+        <section>
+          <p><u> Theorem </u></p>
+          <small>
+          Let \(X\) and \(Y\) be SDEs
+          \[
+          \dd X = f(X) \dd t + \sigma(t) \dd W, \\
+          \dd Y = \sigma(t) \dd W,
+          \]
+          then
+          \[
+          p_X(x_{1:N}) = p_Y(x_{1:N})\mathbb{E}_Y\left[e^{S[Y]} \,\middle|\, Y(t_n) = x_n \right] \\
+          S[Y] = \int f^T(Y_t)\sigma^{-2}(t) \dd Y_t - \frac{1}{2} \int f^T(Y_t)\sigma^{-2}(t)f(Y_t) \dd t
+          \]
+          </small>
+        </section>
+        <section>
+          <p><u> Importance Sampling Algorithm </u></p>
+          <pre><code data-trim data-line-numbers class="language-python">
+          Y, t = sample_bridge(xs, ts)
+          dt = t[1:] - t[:-1]
+          dY = Y[1:] - Y[:-1]
+          fs = f(Y[:-1])
+          sigma_inv_sqr = pow(sigma, -2)
+          alpha = sum(fs * sigma_inv_sqr * dY)
+          beta = sum(fs * sigma_inv_sqr * fs * dt)
+          S = alpha - 0.5 * beta
+          </code></pre>
+          <pre><code data-trim data-line-numbers class="language-python">
+          log_prob = log_probY(xs) + logsumexp(S)
+          </code></pre>
+        </section>
+        -->
+        <section>
+          <p><u> Path Space Importance Sampling </u></p>
+          <div style="float:left;width:49%">
+            <img src="images/randwalk.png"> <br />
+            <small> Integrator samples </small>
+          </div>
+          <div style="float:left;width:49%">
+            <td> <img src="images/bridge.png"> <br />
+            <small> Bridge samples </small>
+          </div>
+        </section>
+        <section>
+          <p><u> Caveat </u></p>
+          <p> Can only learn state-dependent diffusion via transformation </p>
+        </section>
+      </section>
+      <section>
+        <section>
+          <p><u> Comparison on Lorenz System </u></p>
+          <div style="float:left;width:49%">
+            <img src="images/lorenz-mse.png"> <br />
+          </div>
+          <div style="float:left;width:49%">
+            <td> <img src="images/lorenz-drift.png"> <br />
+          </div>
+          <p> \(52\times\) speed up! </p>
+        </section>
+        <section>
+          <p><u> Gradient Variance </u></p>
+          <p><small> Chicken pox data set &mdash; 20 dimensions </small></p>
+          <img src="images/gradient-var-adj.png" width="49%">
+          <img src="images/gradient-var-pathint.png" width="49%">
+        </section>
+        <section>
+          <p><u> GP Demonstration </u></p>
+          <p><small> \[f \sim \mathcal{GP}(0, k_{\mathrm{rbf}})\] </small></p>
+          <div style="float:left;width:49%">
+            <img src="images/vdp-truth.png"> <br />
+            <small> Ground truth </small>
+          </div>
+          <div style="float:left;width:49%">
+            <td> <img src="images/vdp-gp.png"> <br />
+            <small> GP posterior </small>
+          </div>
+          <!--
+          <div style="float:left;width:33%">
+            <td> <img src="images/gp-err.png"> <br />
+            <small> Uncertainty </small>
+          </div>
+          -->
+        </section>
+      </section>
+      <section>
+        <p><u> Takeaways </u></p>
+        <ul>
+          <li> Parallelizable, multi-core, multi-gpu </li>
+          <br />
+          <li> Trajectories pass through observations </li>
+          <br />
+          <li> Easier to use GP prior on \(f\) </li>
+        </ul>
+      </section>
+    </div>
+  </div>
+  <script>
+    Reveal.initialize({
+      controlsTutorial: false,
+      slideNumber: null,
+      hash: true,
+      math: {
+        TeX: {
+          Macros: {
+            dd: "{\\mathrm{d}}",
+            N: "{\\mathcal{N}}"
+          }
+        }
+      },
+      plugins: [
+        RevealMarkdown,
+        RevealMath,
+        RevealHighlight,
+        RevealNotes
+      ],
+    });
+  </script>
+</body>
+
+</html>
